@@ -1,26 +1,37 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Navbar } from "./components/Navbar";
+import { ApplicationsPage } from "./components/pages/ApplicationsPage";
 import { ChannelsPage } from "./components/pages/ChannelsPage";
-import { DeployPage } from "./components/pages/DeployPage";
+import { ChannelDetailPage } from "./components/pages/ChannelDetailPage";
 import { MonitorPage } from "./components/pages/MonitorPage";
-import { INITIAL_CHANNELS, MOCK_BUILDS } from "./data/mockData";
-import type { Channel, Deployment, LogEntry, LogLevel, TabId } from "./types";
+import { APPLICATIONS, CHANNELS, GITLAB_BUILDS } from "./data/mockData";
+import type {
+  Application,
+  Channel,
+  Deployment,
+  LogEntry,
+  LogLevel,
+  TabId,
+} from "./types";
 import { createLogEntry } from "./utils/logUtils";
 
+type PageView = "applications" | "channels" | "channel-detail" | "monitor";
+
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabId>("channels");
-  const [channels, setChannels] = useState<Channel[]>(INITIAL_CHANNELS);
-  const [activeChannelId, setActiveChannelId] = useState<string | null>(
-    INITIAL_CHANNELS[0]?.id ?? null,
-  );
-  const [selectedBuildId, setSelectedBuildId] = useState<string | null>(null);
+  const [pageView, setPageView] = useState<PageView>("applications");
+  const [applications] = useState<Application[]>(APPLICATIONS);
+  const [channels, setChannels] = useState<Channel[]>(CHANNELS);
+  const [activeAppId, setActiveAppId] = useState<string | null>(null);
+  const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [currentDeployment, setCurrentDeployment] = useState<Deployment | null>(
     null,
   );
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isDeploying, setIsDeploying] = useState(false);
 
+  const activeApp = applications.find((a) => a.id === activeAppId) ?? null;
   const activeChannel = channels.find((c) => c.id === activeChannelId) ?? null;
+  const appChannels = channels.filter((c) => c.applicationId === activeAppId);
 
   const addLog = useCallback((message: string, level: LogLevel = "info") => {
     setLogs((prev) => [...prev, createLogEntry(message, level)]);
@@ -34,101 +45,137 @@ const App: React.FC = () => {
     );
   }, [addLog]);
 
-  const handleCreateChannel = useCallback(
-    (name: string) => {
-      const exists = channels.some(
-        (c) => c.name.toLowerCase() === name.toLowerCase(),
+  // ---- Navigation Handlers ----
+  const handleSelectApplication = useCallback(
+    (appId: string) => {
+      const app = applications.find((a) => a.id === appId);
+      if (!app) return;
+      setActiveAppId(appId);
+      setActiveChannelId(null);
+      setPageView("channels");
+      addLog(
+        `Opened application "${app.name}" — ${app.channelsCount} channels, ${app.buildsCount} builds.`,
+        "info",
       );
-      if (exists) {
-        addLog(`Channel "${name}" already exists. Creation skipped.`, "warn");
-        return;
-      }
-      const newChannel: Channel = {
-        id: `c-${Date.now()}`,
-        name,
-        createdAt: new Date(),
-        isActive: false,
-      };
-      setChannels((prev) => [...prev, newChannel]);
-      // Auto-select newly created channel
-      setActiveChannelId(newChannel.id);
-      addLog(`Created new testing channel: "${name}"`, "success");
-      addLog(`Auto-selected "${name}" as active channel.`, "info");
-
-      // 🔗 AUTO-NAVIGATE: Go to Deploy page after creating channel
-      setTimeout(() => {
-        addLog("Navigating to Deploy page...", "info");
-        setActiveTab("deploy");
-      }, 700);
     },
-    [channels, addLog],
+    [applications, addLog],
   );
+
+  const handleBackToApplications = useCallback(() => {
+    setPageView("applications");
+    setActiveAppId(null);
+    setActiveChannelId(null);
+  }, []);
 
   const handleSelectChannel = useCallback(
-    (id: string) => {
-      setActiveChannelId(id);
-      const channel = channels.find((c) => c.id === id);
-      if (channel) {
-        addLog(`Switched active channel context to "${channel.name}".`, "info");
-
-        // 🔗 AUTO-NAVIGATE: Go to Deploy page after selecting channel
-        setTimeout(() => {
-          addLog(
-            `Ready to deploy. Navigating to Deploy page for "${channel.name}"...`,
-            "info",
-          );
-          setActiveTab("deploy");
-        }, 500);
-      }
+    (channelId: string) => {
+      const channel = channels.find((c) => c.id === channelId);
+      if (!channel) return;
+      setActiveChannelId(channelId);
+      setPageView("channel-detail");
+      addLog(
+        `Opened channel "${channel.name}" (v${channel.buildVersion} / ${channel.platform}).`,
+        "info",
+      );
     },
     [channels, addLog],
   );
 
-  const handleDeploy = useCallback(() => {
-    const build = MOCK_BUILDS.find((b) => b.id === selectedBuildId);
-    if (!build || !activeChannel) return;
+  const handleBackToChannels = useCallback(() => {
+    setPageView("channels");
+    setActiveChannelId(null);
+  }, []);
 
-    setIsDeploying(true);
-    addLog(
-      `Initiating deployment of "${build.branch}" (${build.commit}) to AWS sandbox...`,
-      "info",
-    );
-    addLog(`Target channel: ${activeChannel.name}`, "info");
+  const handleCreateChannel = useCallback(
+    (data: {
+      name: string;
+      buildVersion: string;
+      platform: "Windows" | "OSX" | "Linux";
+      password: string;
+    }) => {
+      if (!activeAppId) return;
 
-    setTimeout(() => {
-      const deployment: Deployment = {
-        id: `dep-${Date.now()}`,
-        channel: activeChannel.name,
-        branch: build.branch,
-        commit: build.commit,
-        deployedAt: new Date(),
-        status: "success",
+      const exists = channels.some(
+        (c) =>
+          c.applicationId === activeAppId &&
+          c.name.toLowerCase() === data.name.toLowerCase(),
+      );
+      if (exists) {
+        addLog(
+          `Channel "${data.name}" already exists in this application.`,
+          "warn",
+        );
+        return;
+      }
+
+      const newChannel: Channel = {
+        id: `ch-${Date.now()}`,
+        applicationId: activeAppId,
+        name: data.name,
+        buildVersion: data.buildVersion,
+        platform: data.platform,
+        password: data.password,
+        createdAt: new Date(),
       };
-      setCurrentDeployment(deployment);
-      setIsDeploying(false);
+      setChannels((prev) => [...prev, newChannel]);
       addLog(
-        `Build "${build.branch}" deployed successfully to AWS sandbox.`,
+        `Created new channel "${data.name}" (v${data.buildVersion} / ${data.platform}) in "${activeApp?.name}".`,
         "success",
       );
-      addLog(
-        `Active deployment: ${build.branch} (${build.commit}) on channel "${activeChannel.name}".`,
-        "success",
-      );
-      addLog("Auto-navigating to Live Monitor...", "info");
+    },
+    [activeAppId, activeApp, channels, addLog],
+  );
 
-      // 🔗 AUTO-NAVIGATE: Go to Monitor page after deployment
-      setActiveTab("monitor");
-    }, 1800);
-  }, [selectedBuildId, activeChannel, addLog]);
+  // ---- Deploy Handler ----
+  const handleDeploy = useCallback(
+    (buildId: string) => {
+      const build = GITLAB_BUILDS.find((b) => b.id === buildId);
+      if (!build || !activeChannel || !activeApp) return;
+
+      setIsDeploying(true);
+      const awsPath = `s3://aws-dev/${activeApp.name.toLowerCase()}/${activeChannel.name}/`;
+
+      addLog(
+        `Fetching build "${build.branch}" (${build.commit}) from GitLab artifacts...`,
+        "info",
+      );
+      addLog(`Target AWS Dev location: ${awsPath}`, "info");
+
+      setTimeout(() => {
+        addLog(`Copying artifact "${build.label}" to AWS dev...`, "info");
+      }, 600);
+
+      setTimeout(() => {
+        const deployment: Deployment = {
+          id: `dep-${Date.now()}`,
+          applicationId: activeApp.id,
+          applicationName: activeApp.name,
+          channelId: activeChannel.id,
+          channelName: activeChannel.name,
+          branch: build.branch,
+          commit: build.commit,
+          version: build.version,
+          deployedAt: new Date(),
+          status: "success",
+          awsPath,
+        };
+        setCurrentDeployment(deployment);
+        setIsDeploying(false);
+        addLog(`Build "${build.branch}" transferred successfully.`, "success");
+        addLog(
+          `Active on channel "${activeChannel.name}" at ${awsPath}`,
+          "success",
+        );
+      }, 2000);
+    },
+    [activeChannel, activeApp, addLog],
+  );
 
   const handleReset = useCallback(() => {
     setCurrentDeployment(null);
     setIsDeploying(false);
     addLog("🔄 RESET TO PRODUCTION: Flushing AWS sandbox...", "warn");
-
-    // 🔗 AUTO-NAVIGATE: Go to Monitor to see reset logs
-    setActiveTab("monitor");
-
+    setPageView("monitor");
     setTimeout(() => {
       addLog(
         "AWS sandbox flushed. Stable master/production build restored.",
@@ -140,53 +187,62 @@ const App: React.FC = () => {
 
   const handleClearLogs = useCallback(() => setLogs([]), []);
 
-  // 🔗 Helper: Quick navigate to Channels from other pages
-  const goToChannels = useCallback(() => setActiveTab("channels"), []);
-  const goToDeploy = useCallback(() => setActiveTab("deploy"), []);
-  const goToMonitor = useCallback(() => setActiveTab("monitor"), []);
+  const handleOpenMonitor = useCallback(() => {
+    setPageView("monitor");
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 antialiased">
       <Navbar
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
+        pageView={pageView}
+        onNavigate={setPageView}
         onReset={handleReset}
         isDeploying={isDeploying}
-        hasActiveChannel={!!activeChannel}
-        hasDeployment={!!currentDeployment}
+        breadcrumbs={{
+          app: activeApp,
+          channel: activeChannel,
+        }}
+        onBackToApplications={handleBackToApplications}
+        onBackToChannels={handleBackToChannels}
       />
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {activeTab === "channels" && (
+        {pageView === "applications" && (
+          <ApplicationsPage
+            applications={applications}
+            onSelectApplication={handleSelectApplication}
+          />
+        )}
+
+        {pageView === "channels" && activeApp && (
           <ChannelsPage
-            channels={channels}
-            activeChannelId={activeChannelId}
+            application={activeApp}
+            channels={appChannels}
             onSelectChannel={handleSelectChannel}
             onCreateChannel={handleCreateChannel}
-            onGoToDeploy={goToDeploy}
+            onBack={handleBackToApplications}
           />
         )}
 
-        {activeTab === "deploy" && (
-          <DeployPage
-            activeChannel={activeChannel}
-            builds={MOCK_BUILDS}
-            selectedBuildId={selectedBuildId}
-            onSelectBuild={setSelectedBuildId}
+        {pageView === "channel-detail" && activeApp && activeChannel && (
+          <ChannelDetailPage
+            application={activeApp}
+            channel={activeChannel}
+            builds={GITLAB_BUILDS}
+            currentDeployment={currentDeployment}
             onDeploy={handleDeploy}
             isDeploying={isDeploying}
-            onGoToChannels={goToChannels}
-            onGoToMonitor={goToMonitor}
+            onBack={handleBackToChannels}
+            onOpenMonitor={handleOpenMonitor}
           />
         )}
 
-        {activeTab === "monitor" && (
+        {pageView === "monitor" && (
           <MonitorPage
             currentDeployment={currentDeployment}
             logs={logs}
             onClearLogs={handleClearLogs}
-            onGoToDeploy={goToDeploy}
-            onGoToChannels={goToChannels}
+            onBackToApplications={handleBackToApplications}
           />
         )}
       </main>

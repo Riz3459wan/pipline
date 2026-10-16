@@ -3,22 +3,19 @@ import type { Deployment, LogEntry } from "../../types";
 import { logLevelColors, logLevelPrefixes } from "../../utils/logUtils";
 import { StatusDot } from "../StatusDot";
 import { Card } from "../ui/Card";
-import { Button } from "../ui/Button";
 
 interface MonitorPageProps {
   currentDeployment: Deployment | null;
   logs: LogEntry[];
   onClearLogs: () => void;
-  onGoToDeploy: () => void;
-  onGoToChannels: () => void;
+  onBackToApplications: () => void;
 }
 
 export const MonitorPage: React.FC<MonitorPageProps> = ({
   currentDeployment,
   logs,
   onClearLogs,
-  onGoToDeploy,
-  onGoToChannels,
+  onBackToApplications,
 }) => {
   const logEndRef = useRef<HTMLDivElement>(null);
 
@@ -34,23 +31,16 @@ export const MonitorPage: React.FC<MonitorPageProps> = ({
             Live Monitor & Logs
           </h2>
           <p className="mt-1 text-sm text-slate-400">
-            Real-time status of the AWS testing server and a live stream of
-            deployment events.
+            Real-time status of the AWS testing server and live deployment
+            events.
           </p>
         </div>
-        {/* 🔗 Quick Actions */}
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={onGoToChannels}
-            className="!text-xs"
-          >
-            ← Channels
-          </Button>
-          <Button variant="primary" onClick={onGoToDeploy} className="!text-xs">
-            🚀 Deploy New Build
-          </Button>
-        </div>
+        <button
+          onClick={onBackToApplications}
+          className="text-xs text-slate-400 transition-colors hover:text-indigo-400"
+        >
+          ← Back to Applications
+        </button>
       </div>
 
       <Card>
@@ -68,6 +58,15 @@ export const MonitorPage: React.FC<MonitorPageProps> = ({
           <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-4">
               <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
+                Application / Channel
+              </p>
+              <p className="mt-1 text-sm font-medium text-white">
+                {currentDeployment.applicationName} /{" "}
+                {currentDeployment.channelName}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-4">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
                 Active Build
               </p>
               <p className="mt-1 truncate text-sm font-medium text-white">
@@ -75,14 +74,6 @@ export const MonitorPage: React.FC<MonitorPageProps> = ({
               </p>
               <p className="font-mono text-xs text-indigo-300">
                 {currentDeployment.commit}
-              </p>
-            </div>
-            <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-4">
-              <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
-                Channel
-              </p>
-              <p className="mt-1 truncate text-sm font-medium text-white">
-                {currentDeployment.channel}
               </p>
             </div>
             <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-4">
@@ -120,13 +111,6 @@ export const MonitorPage: React.FC<MonitorPageProps> = ({
               No active deployment. The AWS sandbox is running the stable
               production build.
             </p>
-            <Button
-              variant="primary"
-              onClick={onGoToDeploy}
-              className="mt-4 !text-xs"
-            >
-              🚀 Deploy a Build
-            </Button>
           </div>
         )}
       </Card>

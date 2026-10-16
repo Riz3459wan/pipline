@@ -1,44 +1,33 @@
 import React from "react";
-import type { TabId } from "../types";
+import type { Application, Channel, TabId } from "../types";
 import { StatusDot } from "./StatusDot";
 import { Button } from "./ui/Button";
 
+type PageView = "applications" | "channels" | "channel-detail" | "monitor";
+
 interface NavbarProps {
-  activeTab: TabId;
-  onTabChange: (tab: TabId) => void;
+  pageView: PageView;
+  onNavigate: (v: PageView) => void;
   onReset: () => void;
   isDeploying: boolean;
-  hasActiveChannel: boolean;
-  hasDeployment: boolean;
+  breadcrumbs: {
+    app: Application | null;
+    channel: Channel | null;
+  };
+  onBackToApplications: () => void;
+  onBackToChannels: () => void;
 }
 
-const TABS: { id: TabId; label: string; shortLabel: string }[] = [
-  { id: "channels", label: "1. Channels", shortLabel: "Channels" },
-  { id: "deploy", label: "2. GitLab & AWS Deploy", shortLabel: "Deploy" },
-  { id: "monitor", label: "3. Live Monitor & Logs", shortLabel: "Monitor" },
-];
-
 export const Navbar: React.FC<NavbarProps> = ({
-  activeTab,
-  onTabChange,
+  pageView,
+  onNavigate,
   onReset,
   isDeploying,
-  hasActiveChannel,
-  hasDeployment,
+  breadcrumbs,
+  onBackToApplications,
+  onBackToChannels,
 }) => {
-  // Progress states
-  const stepStatus = {
-    channels: hasActiveChannel ? "done" : "active",
-    deploy: hasDeployment ? "done" : hasActiveChannel ? "active" : "pending",
-    monitor: hasDeployment ? "active" : "pending",
-  } as const;
-
-  const renderStepIndicator = (tabId: TabId) => {
-    const status = stepStatus[tabId];
-    if (status === "done") return <span className="text-emerald-400">✓</span>;
-    if (status === "active") return <span className="text-indigo-400">●</span>;
-    return <span className="text-slate-600">○</span>;
-  };
+  const { app, channel } = breadcrumbs;
 
   return (
     <header className="sticky top-0 z-50 border-b border-slate-800 bg-slate-950/80 backdrop-blur-xl">
@@ -58,73 +47,76 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             </div>
           </div>
-          <Button
-            variant="outline"
-            onClick={onReset}
-            className="!px-3 !py-1.5 !text-xs sm:!px-4 sm:!py-2 sm:!text-sm"
-          >
-            🔄 Reset to Production
-          </Button>
-        </div>
 
-        {/* Workflow Progress Bar */}
-        <div className="flex items-center gap-2 py-2 text-[10px] text-slate-500 sm:text-xs">
-          <span className="font-medium uppercase tracking-wider">
-            Workflow:
-          </span>
-          <div className="flex items-center gap-1.5">
-            <span
-              className={
-                stepStatus.channels === "done"
-                  ? "text-emerald-400"
-                  : stepStatus.channels === "active"
-                    ? "text-indigo-400"
-                    : "text-slate-600"
-              }
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => onNavigate("monitor")}
+              className="!px-3 !py-1.5 !text-xs hidden sm:inline-flex"
             >
-              Channel Selected
-            </span>
-            <span className="text-slate-700">→</span>
-            <span
-              className={
-                stepStatus.deploy === "done"
-                  ? "text-emerald-400"
-                  : stepStatus.deploy === "active"
-                    ? "text-indigo-400"
-                    : "text-slate-600"
-              }
+              📊 Logs
+            </Button>
+            <Button
+              variant="outline"
+              onClick={onReset}
+              className="!px-3 !py-1.5 !text-xs sm:!px-4 sm:!py-2 sm:!text-sm"
             >
-              Build Selected
-            </span>
-            <span className="text-slate-700">→</span>
-            <span
-              className={
-                stepStatus.monitor === "active"
-                  ? "text-indigo-400"
-                  : "text-slate-600"
-              }
-            >
-              Deployed
-            </span>
+              🔄 Reset to Production
+            </Button>
           </div>
         </div>
 
-        <nav className="flex gap-1 overflow-x-auto pb-1">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => onTabChange(tab.id)}
-              className={`flex items-center gap-2 whitespace-nowrap rounded-t-lg px-4 py-2.5 text-xs font-medium transition-colors sm:text-sm ${
-                activeTab === tab.id
-                  ? "border-b-2 border-indigo-500 bg-slate-900/50 text-white"
-                  : "text-slate-400 hover:bg-slate-900/30 hover:text-slate-200"
-              }`}
-            >
-              <span className="text-[10px]">{renderStepIndicator(tab.id)}</span>
-              <span className="hidden sm:inline">{tab.label}</span>
-              <span className="sm:hidden">{tab.shortLabel}</span>
-            </button>
-          ))}
+        {/* Breadcrumbs */}
+        <nav className="flex items-center gap-2 pb-3 text-xs sm:text-sm">
+          <button
+            onClick={onBackToApplications}
+            className={`transition-colors ${
+              pageView === "applications"
+                ? "font-medium text-white"
+                : "text-slate-400 hover:text-indigo-400"
+            }`}
+          >
+            Applications
+          </button>
+
+          {app && (
+            <>
+              <span className="text-slate-700">/</span>
+              <button
+                onClick={onBackToApplications}
+                className={`transition-colors ${
+                  pageView === "channels"
+                    ? "font-medium text-white"
+                    : "text-slate-400 hover:text-indigo-400"
+                }`}
+              >
+                {app.name}
+              </button>
+            </>
+          )}
+
+          {app && channel && (
+            <>
+              <span className="text-slate-700">/</span>
+              <button
+                onClick={onBackToChannels}
+                className={`transition-colors ${
+                  pageView === "channel-detail"
+                    ? "font-medium text-white"
+                    : "text-slate-400 hover:text-indigo-400"
+                }`}
+              >
+                {channel.name}
+              </button>
+            </>
+          )}
+
+          {pageView === "monitor" && (
+            <>
+              <span className="text-slate-700">/</span>
+              <span className="font-medium text-white">Live Monitor</span>
+            </>
+          )}
         </nav>
       </div>
     </header>
