@@ -11,7 +11,6 @@ import type {
   Deployment,
   LogEntry,
   LogLevel,
-  TabId,
 } from "./types";
 import { createLogEntry } from "./utils/logUtils";
 

@@ -1,6 +1,5 @@
 import React from "react";
 import type { Application } from "../../types";
-import { Card } from "../ui/Card";
 
 interface ApplicationsPageProps {
   applications: Application[];

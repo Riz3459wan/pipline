@@ -1,5 +1,5 @@
 import React from "react";
-import type { Application, Channel, TabId } from "../types";
+import type { Application, Channel } from "../types";
 import { StatusDot } from "./StatusDot";
 import { Button } from "./ui/Button";
 
